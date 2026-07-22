@@ -68,14 +68,17 @@ g:\Na\videos\
 
 ### 3.2 录制工具
 
-| 场景 | 工具 | 说明 |
-|---|---|---|
-| Unity 编辑器操作 | **OBS Studio**（推荐） | 窗口采集 Unity 编辑器，固定 1080p 输出 |
-| Play 模式漫游/效果演示 | OBS 录 Game 视图；或 **Unity Recorder**（`com.unity.recorder` 包） | Recorder 可精确 1080p30 输出 Game 视图，适合封面级画面 |
-| Blender 操作 | OBS 窗口采集 | |
-| 终端/Python 运行 | OBS 窗口采集 | 深色终端主题 |
+| 场景 | 工具 | 自动化率 | 说明 |
+|---|---|---|---|
+| Play 模式漫游/效果演示 | **Unity Recorder API 脚本驱动**（首选） | ~90% | Editor 脚本用 `RecorderController` 启停录制 + 代码驱动相机路径，batchmode 直接出 1080p30 mp4（见 §3.4） |
+| Play 模式漫游（手动备选） | OBS 录 Game 视图 | 0% | 脚本路线不可用时的保底 |
+| Unity 编辑器 UI 操作演示 | Editor 脚本预演 + **OBS 人工录** | ~30% | 操作由脚本半自动执行，人按 OBS 启停（见 §3.4） |
+| Blender 操作 | OBS 窗口采集 | 0% | |
+| 终端/Python 运行 | OBS 窗口采集 | 0% | 深色终端主题 |
 
 > OBS 参考设置：输出 1920×1080、30fps、x264、CRF 18-20；录完后如需转 yuv420p：`ffmpeg -i in.mp4 -pix_fmt yuv420p -c:v libx264 out.mp4`
+
+> Unity Recorder 需安装 `com.unity.recorder` 包（E01 环境检查时一并装）。
 
 ### 3.3 录制内容规范
 
@@ -83,8 +86,33 @@ g:\Na\videos\
 - **操作前先想好脚本**：按 `03` 附录 E 的素材清单逐条录制
 - **命名**：`clips/{两位序号}_{语义}.mp4`，如 `01_demo_hook.mp4`、`05_snow_slider.mp4`
 - **对比画面**：同机位、同视角录"前/后"两段，时长尽量一致
-- **封面素材**：`03` 大纲标注"封面素材"的片段，单独多录一条高质量版（ Recorder 输出、运镜平稳）
+- **封面素材**：`03` 大纲标注"封面素材"的片段，单独多录一条高质量版（Recorder 输出、运镜平稳）
 - **编辑器观感**：深色主题；Scene/Game 视图最大化录制；隐藏无关窗口；暂停时手离开鼠标
+
+### 3.4 自动化录屏分级（配合 02 §4A）
+
+录屏素材按"能不能脚本化"分两级处理：
+
+**A. 可全自动：漫游 / 效果演示类**（约占录屏素材 70%，含全部封面素材）
+
+- 原理：录的是 **Game 视图**——相机路径、参数滑杆、季节切换都能用代码驱动，无需人碰编辑器
+- 实现：`Scripts/Editor/MyNatureBuilder_Recorder.cs`
+  - 相机路径：`AnimationCurve` / 航点列表插值驱动漫游相机
+  - 效果演示：脚本控制 `Snow=0→1`、ColorManager 切 slot、TimeOfDay 变化等
+  - Recorder：`RecorderControllerSettings` 配 MovieRecorder（1080p30 H.264）→ `Prepare/StartRecording` → 播完 `StopRecording`
+- 触发：`-batchmode -executeMethod MyNature.Builder.RecordClips -quit`（带 GPU，**不加** `-nographics`）
+- 产出直接落 `videos/E{xx}/clips/`，人只做验收挑选
+- ⚠️ batchmode 下 Recorder 渲染依赖 GPU 可用；个别机器若失败，退化 OBS 手动录 Game 视图
+
+**B. 半自动：编辑器 UI 操作演示类**（约占 20-30%，教学"跟着做"镜头）
+
+- 原理：教学需要**看到**菜单被点、Inspector 变化——这类画面必须录编辑器 UI，无法无头
+- 半自动做法：
+  1. Editor 脚本写一个"演示驱动器"：按预定节奏自动执行操作（`EditorApplication.ExecuteMenuItem`、选中资产、PingObject、改 Inspector 值），步进间隔留 1-2 秒
+  2. 人只负责：OBS 开始 → 跑驱动器 → OBS 停止
+- 人仍需在场，但操作零失误、可反复重录，单条素材实际人工耗时 ≈ 1 分钟
+
+> 结论：**全部封面素材与漫游素材可无人值守产出**；需人介入的只剩 B 类短镜头，每集约 5-10 条。
 
 ---
 
