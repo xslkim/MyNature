@@ -30,8 +30,8 @@ g:\Na\videos\
 └── ...E18
 ```
 
-- 文件夹命名：`E{两位集号}_{英文短名}`，与 `03` 大纲的 commit 标签对应
-- `meta.md` 的 `slug` 与文件夹英文名一致（如 `e01-project-skeleton`）
+- 文件夹命名：`E{两位集号}_{英文短名}`（下划线），与 `03` 大纲的 commit 标签对应
+- `slug` 转换规则（机器可核对）：**`slug = 文件夹名小写 + 下划线转连字符`**——如文件夹 `E01_project_skeleton` ↔ slug `e01-project-skeleton`
 - `voiceRef` 统一相对引用：`../voice.wav`
 
 ---
@@ -72,7 +72,7 @@ g:\Na\videos\
 |---|---|---|---|
 | Play 模式漫游/效果演示 | **Unity Recorder API 脚本驱动**（首选） | ~90% | Editor 脚本用 `RecorderController` 启停录制 + 代码驱动相机路径，batchmode 直接出 1080p30 mp4（见 §3.4） |
 | Play 模式漫游（手动备选） | OBS 录 Game 视图 | 0% | 脚本路线不可用时的保底 |
-| Unity 编辑器 UI 操作演示 | Editor 脚本预演 + **OBS 人工录** | ~30% | 操作由脚本半自动执行，人按 OBS 启停（见 §3.4） |
+| Unity 编辑器 UI 操作演示 | **obs-websocket 全自动**（首选）：Editor 演示驱动器 + WebSocket 启停录制 | ~90% | 保底：Editor 预演 + 人按 OBS（见 §3.4） |
 | Blender 操作 | OBS 窗口采集 | 0% | |
 | 终端/Python 运行 | OBS 窗口采集 | 0% | 深色终端主题 |
 
@@ -104,15 +104,16 @@ g:\Na\videos\
 - 产出直接落 `videos/E{xx}/clips/`，人只做验收挑选
 - ⚠️ batchmode 下 Recorder 渲染依赖 GPU 可用；个别机器若失败，退化 OBS 手动录 Game 视图
 
-**B. 半自动：编辑器 UI 操作演示类**（约占 20-30%，教学"跟着做"镜头）
+**B. 编辑器 UI 操作演示类**（约占 20-30%，教学"跟着做"镜头）
 
 - 原理：教学需要**看到**菜单被点、Inspector 变化——这类画面必须录编辑器 UI，无法无头
-- 半自动做法：
-  1. Editor 脚本写一个"演示驱动器"：按预定节奏自动执行操作（`EditorApplication.ExecuteMenuItem`、选中资产、PingObject、改 Inspector 值），步进间隔留 1-2 秒
-  2. 人只负责：OBS 开始 → 跑驱动器 → OBS 停止
-- 人仍需在场，但操作零失误、可反复重录，单条素材实际人工耗时 ≈ 1 分钟
+- **首选：obs-websocket 全自动**（OBS 28+ 内置 WebSocket 服务）：
+  1. Editor 脚本写"演示驱动器"：按预定节奏自动执行操作（`EditorApplication.ExecuteMenuItem`、选中资产、PingObject、改 Inspector 值），步进间隔留 1-2 秒
+  2. 驱动器开头用 C# WebSocket 客户端（或 Python 小服务）连 OBS → 发 `StartRecord` → 跑操作序列 → 发 `StopRecord` → 文件自动落 `clips/`
+  3. 人只做**成片验收**，不在场
+- 保底：obs-websocket 不可用时，人按 OBS 启停 + 驱动器自动操作（单条约 1 分钟人工）
 
-> 结论：**全部封面素材与漫游素材可无人值守产出**；需人介入的只剩 B 类短镜头，每集约 5-10 条。
+> 结论：**A、B 两类录屏均可无人值守产出**；人的角色收敛为"成片验收 + 异常重录"。
 
 ---
 
@@ -214,13 +215,15 @@ C# 每帧推这些变量，shader 只管读
 
 ## 7. 每集视频产出 Checklist
 
+> 前 6 项由 `tools/video_lint.py` 机器预检（构建前必跑），人只看 lint 报告 + 做 7-9 项。
+
 ```
-□ 1. 代码/工程工作完成，该集 commit + tag 已打
-□ 2. 按 03 附录 E 清单录完全部 clips（1080p30, yuv420p）
-□ 3. 制作全部 HTML 截图 shots（风格符合 §4.2）
-□ 4. 写 meta.md（模板 §5）
-□ 5. 写 script.md（约定 §6；旁白通读，超 50 字拆行）
-□ 6. 检查每个块的 @visual 模式与素材文件路径对应
+□ 1. [lint] 代码/工程工作完成，该集 commit + tag 已打（git tag 存在性）
+□ 2. [lint] clips 齐全且参数合规（ffprobe：1080p / 30fps / yuv420p / H.264）
+□ 3. [lint] HTML 截图 shots 齐全（script.md 引用的 png 均存在）
+□ 4. [lint] meta.md 字段完整（title/slug/aspect/fps/voiceRef；slug 符合 §1 转换规则）
+□ 5. [lint] script.md：每块 @visual 路径存在、块 ID 从 B01 递增无重号、旁白每行 ≤50 字
+□ 6. [lint] 每个块的 @visual 模式与素材文件类型匹配（video→mp4 / image→png）
 □ 7. 交给构建 Agent 按 BUILD.md 构建 → 得到 MP4
 □ 8. 成片自查：字幕不超行、画面与旁白对得上、无黑屏/素材缺失
 □ 9. 归档：视频工程目录随 git 提交（clips 大文件按需取舍）
@@ -228,14 +231,15 @@ C# 每帧推这些变量，shader 只管读
 
 ---
 
-## 8. 待办（视频管线启动前）
+## 8. 启动条件（阻塞项，已前置到 `02` §2 状态盘点）
 
-| 项 | 状态 | 负责 |
+| 项 | 状态 | 验收方式 |
 |---|---|---|
-| 参考音色 `voice.wav`（10-30s 清晰人声） | ⚠️ 待提供 | 用户 |
-| OBS / Unity Recorder 安装与 1080p30 预设 | 待确认 | 用户环境 |
-| `g:\Na\videos\` 目录创建与 git 纳管 | 待执行 | E01 时一起做 |
-| AutoVideo 引擎位置确认（BUILD.md 所在） | 待确认 | 用户 |
+| 参考音色 `voice.wav` | ⚠️ 待提供（用户） | 10-30s 清晰人声、无底噪、44.1kHz；TTS 试音通过 |
+| AutoVideo 引擎位置（BUILD.md 所在） | ⚠️ 待确认（用户） | 构建 Agent 能按 BUILD.md 跑通一个测试视频 |
+| OBS 28+（含 obs-websocket）/ Unity Recorder | 待确认 | E01 环境检查时安装并连通测试 |
+
+> ⚠️ 这三项是**视频管线启动条件**：E01 素材录完前必须就绪，否则第一支视频无法构建。状态同步维护在 `02` §2。
 
 ---
 
